@@ -22,7 +22,7 @@ const emptyMember = {
   isActive: true,
 };
 
-const photoHost = API_BASE.replace(/\/api\/?$/, "");
+const photoHost = API_BASE.replace(/\/api\/?$/, "").replace(/\/$/, "") || (typeof window !== "undefined" ? window.location.origin : "");
 
 const photoSrc = (value?: string) => {
   if (!value) return "";

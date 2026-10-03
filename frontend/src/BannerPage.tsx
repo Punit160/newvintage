@@ -20,7 +20,7 @@ const BannerPage = () => {
     fetchBanners();
   }, []);
 
-  const getBaseURL = () => API_BASE.replace('/api', '').replace(/\/$/, '');
+  const getBaseURL = () => API_BASE.replace(/\/api\/?$/, '').replace(/\/$/, '') || window.location.origin;
 
   const fetchBanners = async () => {
     setIsLoading(true);

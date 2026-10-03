@@ -23,12 +23,17 @@ const emptyForm = {
   isActive: true,
 };
 
-const photoHost = API_BASE.replace(/\/api\/?$/, "");
+const assetHost = () => {
+  const stripped = API_BASE.replace(/\/api\/?$/, "").replace(/\/$/, "");
+  if (stripped) return stripped;
+  if (typeof window !== "undefined") return window.location.origin;
+  return "";
+};
 
 const photoSrc = (value?: string) => {
   if (!value) return "";
   if (value.startsWith("http") || value.startsWith("blob:") || value.startsWith("data:")) return value;
-  return `${photoHost}${value.startsWith("/") ? value : `/${value}`}`;
+  return `${assetHost()}${value.startsWith("/") ? value : `/${value}`}`;
 };
 
 const planName = (subscription: PortalUser["subscription"]) => {

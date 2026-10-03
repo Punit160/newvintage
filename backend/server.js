@@ -225,19 +225,54 @@ app.set("userSocketMap", userSocketMap);
 const PORT = process.env.PORT || 5000;
 
 function rewriteLiveAppUrl(url) {
-  const prefixes = [
-    ['/api/api/api', '/api'],
-    ['/api/api/uploads', '/uploads'],
-    ['/api/api/images', '/uploads'],
-  ];
+  const queryIndex = url.indexOf('?');
+  const query = queryIndex === -1 ? '' : url.slice(queryIndex);
+  let path = queryIndex === -1 ? url : url.slice(0, queryIndex);
 
-  for (const [from, to] of prefixes) {
-    if (url === from || url.startsWith(`${from}/`) || url.startsWith(`${from}?`)) {
-      return to + url.slice(from.length);
-    }
+  while (path === '/api/api' || path.startsWith('/api/api/')) {
+    path = path.slice(4);
   }
 
-  return null;
+  if (path === '/api/uploads' || path.startsWith('/api/uploads/')) {
+    path = path.slice(4);
+  }
+
+  if (path === '/images' || path.startsWith('/images/')) {
+    path = `/uploads${path.slice('/images'.length)}`;
+  } else if (path === '/api/images' || path.startsWith('/api/images/')) {
+    path = `/uploads${path.slice('/api/images'.length)}`;
+  }
+
+  const next = path + query;
+  return next === url ? null : next;
+}
+
+function publicOrigin(req) {
+  const configured = (process.env.PUBLIC_URL || '').trim().replace(/\/$/, '');
+  if (configured) return configured;
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
+  const host = String(req.headers['x-forwarded-host'] || req.get('host') || '').split(',')[0].trim();
+  return `${proto}://${host}`;
+}
+
+function absolutizeUploads(value, origin) {
+  if (typeof value === 'string') {
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
+    if (value.startsWith('/uploads/') || value.startsWith('/images/')) {
+      const filePath = value.startsWith('/images/')
+        ? `/uploads/${value.slice('/images/'.length)}`
+        : value;
+      return `${origin}${filePath}`;
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map((item) => absolutizeUploads(item, origin));
+  if (value && typeof value === 'object') {
+    const copy = {};
+    for (const key of Object.keys(value)) copy[key] = absolutizeUploads(value[key], origin);
+    return copy;
+  }
+  return value;
 }
 
 // ✅ Enhanced CORS configuration
@@ -263,8 +298,9 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
       mediaSrc: ["'self'", "data:", "blob:", "*"],
-      connectSrc: ["'self'", "https:", "wss:"],
+      connectSrc: ["'self'", "https:", "wss:", "http:"],
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
+      upgradeInsecureRequests: null,
     },
   },
 }));
@@ -291,10 +327,26 @@ app.use(morgan('combined'));
 // Live Play Store / App Store builds call https://vintagecms.cloud/api/api/api
 // and load media from https://vintagecms.cloud/api/api/uploads.
 // The admin portal keeps using /api and /uploads. Rewrite before the routes.
-app.use((req, _res, next) => {
+app.use((req, res, next) => {
   const url = req.url || '';
   const rewritten = rewriteLiveAppUrl(url);
   if (rewritten) req.url = rewritten;
+
+  if ((req.url || '').startsWith('/api')) {
+    delete req.headers['if-none-match'];
+    delete req.headers['if-modified-since'];
+  }
+
+  const origin = publicOrigin(req);
+  const sendJson = res.json.bind(res);
+  res.json = (body) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      return sendJson(absolutizeUploads(JSON.parse(JSON.stringify(body)), origin));
+    } catch (error) {
+      return sendJson(body);
+    }
+  };
   next();
 });
 
