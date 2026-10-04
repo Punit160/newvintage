@@ -14,8 +14,15 @@ const imageUpload = multer({
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (/^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)) cb(null, true);
-    else cb(new Error("Image must be a JPEG, PNG, WebP, or GIF"));
+    const type = String(file.mimetype || "").toLowerCase();
+    const name = String(file.originalname || "").toLowerCase();
+    if (/^image\/(jpeg|jpg|pjpeg|png|webp|gif)$/.test(type) || /\.(jpe?g|png|webp|gif)$/.test(name)) {
+      cb(null, true);
+    } else if (type.includes("heic") || type.includes("heif") || /\.hei[cf]$/.test(name)) {
+      cb(new Error("iPhone HEIC photos cannot be uploaded. Save the photo as a JPEG and try again."));
+    } else {
+      cb(new Error("Image must be a JPEG, PNG, WebP, or GIF under 5 MB"));
+    }
   },
 });
 
@@ -35,6 +42,11 @@ const readWellness = (req, res, next) => {
   next();
 };
 
+const keepUploadPath = (value) => {
+  const match = String(value || "").match(/\/uploads\/[^?#]+/);
+  return match ? match[0] : "";
+};
+
 // ✅ Create a new wellness item
 router.post("/", adminAuth, readWellness, async (req, res) => {
   try {
@@ -44,7 +56,11 @@ router.post("/", adminAuth, readWellness, async (req, res) => {
       detail: req.body.detail,
       color: req.body.color,
       icon: req.body.icon || "",
-      ...(req.file ? { image: `/uploads/${req.file.filename}` } : req.body.image ? { image: req.body.image } : {}),
+      ...(req.file
+        ? { image: `/uploads/${req.file.filename}` }
+        : keepUploadPath(req.body.image)
+          ? { image: keepUploadPath(req.body.image) }
+          : {}),
     });
     await wellness.save();
     res.status(201).json({ success: true, data: wellness });
@@ -84,8 +100,14 @@ router.put("/:id", adminAuth, readWellness, async (req, res) => {
       color: req.body.color,
       icon: req.body.icon || "",
     };
+    if (String(req.headers["content-type"] || "").includes("multipart/form-data") && !req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "The image was not received. Use a JPEG, PNG, WebP, or GIF under 5 MB.",
+      });
+    }
     if (req.file) update.image = `/uploads/${req.file.filename}`;
-    else if (req.body.image) update.image = req.body.image;
+    else if (keepUploadPath(req.body.image)) update.image = keepUploadPath(req.body.image);
     const updated = await Wellness.findByIdAndUpdate(req.params.id, update, {
       new: true,
     });

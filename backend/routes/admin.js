@@ -434,8 +434,12 @@ const photoUpload = multer({
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (/^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)) cb(null, true);
-    else cb(new Error('Profile photo must be a JPEG, PNG, WebP, or GIF'));
+    const type = String(file.mimetype || '').toLowerCase();
+    const name = String(file.originalname || '').toLowerCase();
+    if (/^image\/(jpeg|jpg|pjpeg|png|webp|gif)$/.test(type) || /\.(jpe?g|png|webp|gif)$/.test(name)) cb(null, true);
+    else if (type.includes('heic') || type.includes('heif') || /\.hei[cf]$/.test(name)) {
+      cb(new Error('iPhone HEIC photos cannot be uploaded. Save the photo as a JPEG and try again.'));
+    } else cb(new Error('Profile photo must be a JPEG, PNG, WebP, or GIF under 5 MB'));
   },
 });
 
@@ -613,7 +617,10 @@ router.put('/users/:userId', [
     if (name) user.name = name;
     if (typeof isActive === 'boolean') user.isActive = isActive;
     if (phone) user.phone = phone;
-    if (avatar) user.avatar = avatar;
+    if (avatar) {
+      const upload = String(avatar).match(/\/uploads\/[^?#]+/);
+      user.avatar = upload ? upload[0] : avatar;
+    }
     if (password) user.password = password;
 
     await user.save();

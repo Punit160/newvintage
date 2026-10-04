@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { API_BASE } from "../constant/Constant";
+import { displayUpload, imageFileError } from "../utils/imageFile";
 
 const emptyForm = {
   color: "#10B981",
@@ -11,13 +12,7 @@ const emptyForm = {
   image: "",
 };
 
-const photoHost = API_BASE.replace(/\/api\/?$/, "").replace(/\/$/, "") || (typeof window !== "undefined" ? window.location.origin : "");
-
-const photoSrc = (value) => {
-  if (!value) return "";
-  if (value.startsWith("http") || value.startsWith("blob:") || value.startsWith("data:")) return value;
-  return `${photoHost}${value.startsWith("/") ? value : `/${value}`}`;
-};
+const photoSrc = (value) => displayUpload(value);
 
 export default function WellnessManager() {
   const [wellnessList, setWellnessList] = useState([]);
@@ -61,12 +56,10 @@ export default function WellnessManager() {
 
   const chooseImage = (file) => {
     if (!file) return;
-    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) {
-      setFormError("Image must be a JPEG, PNG, WebP, or GIF");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setFormError("Image must be under 5 MB");
+    const problem = imageFileError(file);
+    if (problem) {
+      setImageFile(null);
+      setFormError(problem);
       return;
     }
     setFormError("");
@@ -249,6 +242,7 @@ export default function WellnessManager() {
                   />
                 </label>
                 <p className="mt-1 text-xs text-gray-500">JPEG, PNG, WebP, or GIF. Up to 5 MB.</p>
+                {formError ? <p className="mt-2 text-sm text-red-600">{formError}</p> : null}
               </div>
               <input
                 type="text"

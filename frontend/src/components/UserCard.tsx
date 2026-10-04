@@ -163,17 +163,27 @@ const SubcategoryForm = ({ subcategory, index, onChange, onRemove, canRemove }: 
   onRemove: (index: number) => void;
   canRemove: boolean;
 }) => {
+  const [imageError, setImageError] = useState("");
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 1 * 1024 * 1024) {
-        alert("Image size should be less than 1MB");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => onChange(index, "image", reader.result as string);
-      reader.readAsDataURL(file);
+    if (!file) return;
+    const type = (file.type || "").toLowerCase();
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"].includes(type) || /\.(jpe?g|png|webp|gif)$/i.test(file.name);
+    if (!allowed) {
+      const reason = type.includes("heic") || /\.hei[cf]$/i.test(file.name)
+        ? `${file.name} is an iPhone HEIC photo. Save it as a JPEG, then upload that file.`
+        : `${file.name}${type ? ` (${type})` : ""} cannot be uploaded. Use a JPEG, PNG, WebP, or GIF.`;
+      setImageError(reason);
+      return;
     }
+    if (file.size > 1 * 1024 * 1024) {
+      setImageError(`${file.name} is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Category images must be under 1 MB.`);
+      return;
+    }
+    setImageError("");
+    const reader = new FileReader();
+    reader.onloadend = () => onChange(index, "image", reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -195,7 +205,8 @@ const SubcategoryForm = ({ subcategory, index, onChange, onRemove, canRemove }: 
       />
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">Image</label>
-        <input className="w-full text-sm" type="file" accept="image/*" onChange={handleFileChange} />
+        <input className="w-full text-sm" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFileChange} />
+        {imageError ? <p className="mt-1 text-sm text-red-600">{imageError}</p> : null}
       </div>
       {subcategory.image && (
         <div className="relative inline-block">

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
 import { API_BASE } from "../constant/Constant";
+import { displayUpload, imageFileError, uploadPath } from "../utils/imageFile";
 
 type PortalUser = {
   _id: string;
@@ -23,18 +24,7 @@ const emptyForm = {
   isActive: true,
 };
 
-const assetHost = () => {
-  const stripped = API_BASE.replace(/\/api\/?$/, "").replace(/\/$/, "");
-  if (stripped) return stripped;
-  if (typeof window !== "undefined") return window.location.origin;
-  return "";
-};
-
-const photoSrc = (value?: string) => {
-  if (!value) return "";
-  if (value.startsWith("http") || value.startsWith("blob:") || value.startsWith("data:")) return value;
-  return `${assetHost()}${value.startsWith("/") ? value : `/${value}`}`;
-};
+const photoSrc = (value?: string) => displayUpload(value);
 
 const planName = (subscription: PortalUser["subscription"]) => {
   if (!subscription) return "No plan";
@@ -129,12 +119,10 @@ export default function UsersManager() {
 
   const choosePhoto = (file: File | undefined) => {
     if (!file) return;
-    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) {
-      setFormError("Profile photo must be a JPEG, PNG, WebP, or GIF");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setFormError("Profile photo must be under 5 MB");
+    const problem = imageFileError(file);
+    if (problem) {
+      setPhotoFile(null);
+      setFormError(problem);
       return;
     }
     setFormError("");
@@ -157,7 +145,10 @@ export default function UsersManager() {
         const body = new FormData();
         body.append("avatar", photoFile);
         const uploaded = await axios.post(`${API_BASE}/admin/users/photo`, body, { headers });
-        avatar = uploaded.data?.data?.avatar || "";
+        avatar = uploadPath(uploaded.data?.data?.avatar);
+        if (!avatar) {
+          throw new Error(uploaded.data?.message || "The photo was not saved. Use a JPEG, PNG, WebP, or GIF under 5 MB.");
+        }
       }
       const payload = {
         name: form.name,
@@ -179,7 +170,7 @@ export default function UsersManager() {
       await loadUsers(search);
     } catch (err: any) {
       const first = err?.response?.data?.errors?.[0]?.msg;
-      setFormError(first || err?.response?.data?.message || "Could not save this patient");
+      setFormError(first || err?.response?.data?.message || err?.message || "Could not save this patient");
     } finally {
       setSaving(false);
     }
@@ -307,6 +298,7 @@ export default function UsersManager() {
               </label>
             </div>
             <p className="mt-1 text-xs text-slate-400">JPEG, PNG, WebP, or GIF. Up to 5 MB.</p>
+            {formError ? <p className="mt-2 text-sm text-red-600">{formError}</p> : null}
           </div>
           <label className="text-sm text-slate-600">
             Status

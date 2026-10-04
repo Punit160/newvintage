@@ -68,17 +68,34 @@ router.put('/profileMain', [
     });
   }
 });
+const acceptProfilePhoto = (req, res, next) => {
+  upload.single("avatar")(req, res, (err) => {
+    if (!err) return next();
+    const message = err.code === "LIMIT_FILE_SIZE"
+      ? "Profile photo must be under 5 MB"
+      : err.message || "Could not upload the photo";
+    res.status(400).json({ success: false, message });
+  });
+};
+
 router.put(
   "/profile",
   auth,
-  upload.single("avatar"),
+  acceptProfilePhoto,
   async (req, res) => {
     try {
-      const updateData = req.body;
+      const updateData = {};
+      ["name", "phone", "email"].forEach((field) => {
+        if (typeof req.body?.[field] === "string") updateData[field] = req.body[field];
+      });
 
       if (req.file) {
-        const cleanPath = req.file.path.replace(/\\/g, "/"); // fix for Windows
-        updateData.avatar = `/${cleanPath}`; // store only relative path
+        updateData.avatar = `/uploads/${req.file.filename}`;
+      } else if (String(req.headers["content-type"] || "").includes("multipart/form-data") && !req.body?.name) {
+        return res.status(400).json({
+          success: false,
+          message: "The photo was not received. Use a JPEG, PNG, WebP, or GIF under 5 MB.",
+        });
       }
 
       const updatedUser = await User.findByIdAndUpdate(

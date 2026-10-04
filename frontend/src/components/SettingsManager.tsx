@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
 import { API_BASE } from "../constant/Constant";
+import { displayUpload, imageFileError, uploadPath } from "../utils/imageFile";
 
 type Account = {
   _id: string;
@@ -22,13 +23,7 @@ const emptyMember = {
   isActive: true,
 };
 
-const photoHost = API_BASE.replace(/\/api\/?$/, "").replace(/\/$/, "") || (typeof window !== "undefined" ? window.location.origin : "");
-
-const photoSrc = (value?: string) => {
-  if (!value) return "";
-  if (value.startsWith("http") || value.startsWith("blob:") || value.startsWith("data:")) return value;
-  return `${photoHost}${value.startsWith("/") ? value : `/${value}`}`;
-};
+const photoSrc = (value?: string) => displayUpload(value);
 
 const authHeaders = () => {
   const token = localStorage.getItem("token");
@@ -92,12 +87,9 @@ export default function SettingsManager({ onProfileSaved }: { onProfileSaved?: (
 
   const choosePhoto = (file: File | undefined, setErrorMessage: (value: string) => void, setFile: (file: File) => void, setPreview: (value: string) => void) => {
     if (!file) return;
-    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) {
-      setErrorMessage("Photo must be a JPEG, PNG, WebP, or GIF");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage("Photo must be under 5 MB");
+    const problem = imageFileError(file);
+    if (problem) {
+      setErrorMessage(problem);
       return;
     }
     setErrorMessage("");
@@ -109,7 +101,11 @@ export default function SettingsManager({ onProfileSaved }: { onProfileSaved?: (
     const body = new FormData();
     body.append("avatar", file);
     const uploaded = await axios.post(`${API_BASE}/admin/users/photo`, body, { headers: authHeaders() });
-    return uploaded.data?.data?.avatar || "";
+    const stored = uploadPath(uploaded.data?.data?.avatar);
+    if (!stored) {
+      throw new Error(uploaded.data?.message || "The photo was not saved. Use a JPEG, PNG, WebP, or GIF under 5 MB.");
+    }
+    return stored;
   };
 
   const saveProfile = async (event: FormEvent) => {
@@ -138,7 +134,7 @@ export default function SettingsManager({ onProfileSaved }: { onProfileSaved?: (
       setShowProfilePassword(false);
     } catch (err: any) {
       const first = err?.response?.data?.errors?.[0]?.msg;
-      setProfileError(first || err?.response?.data?.message || "Could not update the account");
+      setProfileError(first || err?.response?.data?.message || err?.message || "Could not update the account");
     } finally {
       setSavingProfile(false);
     }
@@ -185,7 +181,7 @@ export default function SettingsManager({ onProfileSaved }: { onProfileSaved?: (
       await load();
     } catch (err: any) {
       const first = err?.response?.data?.errors?.[0]?.msg;
-      setMemberError(first || err?.response?.data?.message || "Could not save this team member");
+      setMemberError(first || err?.response?.data?.message || err?.message || "Could not save this team member");
     } finally {
       setSavingMember(false);
     }
@@ -239,6 +235,8 @@ export default function SettingsManager({ onProfileSaved }: { onProfileSaved?: (
               />
             </label>
           </div>
+          <p className="mt-1 text-xs text-slate-400">JPEG, PNG, WebP, or GIF. Up to 5 MB.</p>
+          {profileError ? <p className="mt-2 text-sm text-red-600">{profileError}</p> : null}
         </div>
         <label className="text-sm text-slate-600">
           Name
