@@ -29,19 +29,22 @@ const acceptImage = (req, res, next) => {
   });
 };
 
+const readWellness = (req, res, next) => {
+  const contentType = String(req.headers["content-type"] || "");
+  if (contentType.includes("multipart/form-data")) return acceptImage(req, res, next);
+  next();
+};
+
 // ✅ Create a new wellness item
-router.post("/", adminAuth, acceptImage, async (req, res) => {
+router.post("/", adminAuth, readWellness, async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: "Choose an image" });
-    }
     const wellness = new Wellness({
       title: req.body.title,
       subtitle: req.body.subtitle,
       detail: req.body.detail,
       color: req.body.color,
-      image: `/uploads/${req.file.filename}`,
       icon: req.body.icon || "",
+      ...(req.file ? { image: `/uploads/${req.file.filename}` } : req.body.image ? { image: req.body.image } : {}),
     });
     await wellness.save();
     res.status(201).json({ success: true, data: wellness });
@@ -72,15 +75,17 @@ router.get("/:id", async (req, res) => {
 });
 
 // ✅ Update a wellness item
-router.put("/:id", adminAuth, acceptImage, async (req, res) => {
+router.put("/:id", adminAuth, readWellness, async (req, res) => {
   try {
     const update = {
       title: req.body.title,
       subtitle: req.body.subtitle,
       detail: req.body.detail,
       color: req.body.color,
+      icon: req.body.icon || "",
     };
     if (req.file) update.image = `/uploads/${req.file.filename}`;
+    else if (req.body.image) update.image = req.body.image;
     const updated = await Wellness.findByIdAndUpdate(req.params.id, update, {
       new: true,
     });

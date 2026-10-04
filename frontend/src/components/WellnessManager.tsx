@@ -7,6 +7,7 @@ const emptyForm = {
   title: "",
   subtitle: "",
   detail: "",
+  icon: "📝",
   image: "",
 };
 
@@ -78,23 +79,22 @@ export default function WellnessManager() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!imageFile && !form.image) {
-      setFormError("Choose an image");
-      return;
-    }
     setLoading(true);
     setFormError("");
     try {
-      const body = new FormData();
-      body.append("title", form.title);
-      body.append("subtitle", form.subtitle);
-      body.append("detail", form.detail);
-      body.append("color", form.color);
-      if (imageFile) body.append("image", imageFile);
+      const payload = {
+        title: form.title.trim(),
+        subtitle: form.subtitle.trim(),
+        detail: form.detail.trim(),
+        color: form.color,
+        icon: (form.icon || "📝").trim() || "📝",
+        ...(form.image ? { image: form.image } : {}),
+      };
+      const headers = { ...authHeaders(), "Content-Type": "application/json" };
       if (editingId) {
-        await axios.put(`${BASE_URL}/${editingId}`, body, { headers: authHeaders() });
+        await axios.put(`${BASE_URL}/${editingId}`, payload, { headers });
       } else {
-        await axios.post(BASE_URL, body, { headers: authHeaders() });
+        await axios.post(BASE_URL, payload, { headers });
       }
       setForm(emptyForm);
       resetImage();
@@ -114,6 +114,7 @@ export default function WellnessManager() {
       title: item.title || "",
       subtitle: item.subtitle || "",
       detail: item.detail || "",
+      icon: item.icon || "📝",
       image: item.image || "",
     });
     resetImage(photoSrc(item.image));
@@ -241,6 +242,14 @@ export default function WellnessManager() {
                 </label>
                 <p className="mt-1 text-xs text-gray-500">JPEG, PNG, WebP, or GIF. Up to 5 MB.</p>
               </div>
+              <input
+                type="text"
+                placeholder="Icon, for example 📝"
+                value={form.icon}
+                onChange={(e) => setForm({ ...form, icon: e.target.value })}
+                className="border rounded p-2"
+                required
+              />
               <input
                 type="text"
                 placeholder="Title"
