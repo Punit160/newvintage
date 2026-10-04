@@ -82,19 +82,27 @@ export default function WellnessManager() {
     setLoading(true);
     setFormError("");
     try {
-      const payload = {
+      const fields = {
         title: form.title.trim(),
         subtitle: form.subtitle.trim(),
         detail: form.detail.trim(),
         color: form.color,
         icon: (form.icon || "📝").trim() || "📝",
-        ...(form.image ? { image: form.image } : {}),
       };
-      const headers = { ...authHeaders(), "Content-Type": "application/json" };
-      if (editingId) {
-        await axios.put(`${BASE_URL}/${editingId}`, payload, { headers });
+      const headers = authHeaders();
+      let body = { ...fields, ...(form.image ? { image: form.image } : {}) };
+      if (imageFile) {
+        const upload = new FormData();
+        Object.entries(fields).forEach(([key, value]) => upload.append(key, value));
+        upload.append("image", imageFile);
+        body = upload;
       } else {
-        await axios.post(BASE_URL, payload, { headers });
+        headers["Content-Type"] = "application/json";
+      }
+      if (editingId) {
+        await axios.put(`${BASE_URL}/${editingId}`, body, { headers });
+      } else {
+        await axios.post(BASE_URL, body, { headers });
       }
       setForm(emptyForm);
       resetImage();

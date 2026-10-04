@@ -436,10 +436,11 @@ export default function BlockedDatesManager() {
   const fetchBlocked = async () => {
     try {
       const res = await axios.get(`${API_BASE}/blocked-dates`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+        params: { t: Date.now() },
+        headers: { "Cache-Control": "no-cache" },
       });
-      const rows = Array.isArray(res.data?.data) ? res.data.data : [];
-      setBlockedList(rows);
+      const payload = res.data?.data ?? res.data?.blocked ?? res.data;
+      setBlockedList(Array.isArray(payload) ? payload : []);
     } catch (err) {
       showNotification("error", "Failed to fetch blocked dates");
     }

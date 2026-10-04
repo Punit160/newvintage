@@ -56,8 +56,15 @@ const MOCK_CHATS = [
 
 
 
+const PAGE_VIEWS = ['dashboard', 'users', 'plans', 'extra', 'chats', 'notifications', 'blockedDates', 'categories', 'wellness', 'banner', 'settings'];
+
+const viewFromHash = () => {
+  const name = window.location.hash.replace(/^#/, '');
+  return PAGE_VIEWS.includes(name) ? name : 'dashboard';
+};
+
 function AdminPanel() {
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState(viewFromHash);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [wellnessCategories, setWellnessCategories] = useState([]);
@@ -80,9 +87,20 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 const [role, setRole] = useState(localStorage.getItem('adminRole') || 'admin');
 
   const handleMenuClick = (itemId) => {
-    setCurrentView(itemId);
-    setIsSidebarOpen(false); // Close sidebar on mobile after selection
-  }
+    const next = PAGE_VIEWS.includes(itemId) ? itemId : 'dashboard';
+    setCurrentView(next);
+    const nextHash = next === 'dashboard' ? '' : `#${next}`;
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
+    }
+    setIsSidebarOpen(false);
+  };
+
+  useEffect(() => {
+    const syncView = () => setCurrentView(viewFromHash());
+    window.addEventListener('hashchange', syncView);
+    return () => window.removeEventListener('hashchange', syncView);
+  }, []);
   // const API_BASE= "http://localhost:5000";
 
   useEffect(() => {
@@ -254,7 +272,7 @@ const handleLogout = () => {
         showToast('Logout successful!', 'success');
   setIsLoggedIn(false);
   setLoginData({ email: '', password: '' });
-  setCurrentView('dashboard');
+  handleMenuClick('dashboard');
   localStorage.removeItem('isLoggedIn');
   localStorage.removeItem('token');
   localStorage.removeItem('adminName');
@@ -286,7 +304,7 @@ const handleLogout = () => {
         if (user.name) localStorage.setItem('adminName', user.name);
         if (user.email) localStorage.setItem('adminEmail', user.email);
         setRole(user.role);
-        if (user.role !== 'admin') setCurrentView((view) => (view === 'settings' ? 'dashboard' : view));
+        if (user.role !== 'admin' && viewFromHash() === 'settings') handleMenuClick('dashboard');
       })
       .catch(() => {});
   }, [isLoggedIn]);
@@ -518,7 +536,7 @@ const handleLogout = () => {
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
         
            {currentView === 'dashboard' && (
-            <DashboardPage onOpen={setCurrentView} />
+            <DashboardPage onOpen={handleMenuClick} />
           )}
           {currentView === 'users' && <UsersManager />}
           {currentView === 'plans' && <AdminCreatePlan />}
